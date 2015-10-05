@@ -4,6 +4,7 @@
 #define PERSIST_MAX 10000
 static unsigned int persist_cnt = 0;
 
+#include "../afl.h"
 #include <r_asm.h>
 
 /* Walks the list of plugins, writes each one into the plugins array, returns
@@ -37,34 +38,27 @@ int main(void) {
 	RAsmPlugin *plugins[256];
 	int nplugins = gather_plugins(rasm, plugins);
 
-try_again:
+	do {
+		/* reset stuff */
+		memset(buf, 0, sizeof buf);
+		memset(&op, 0, sizeof op);
 
-	/* reset stuff */
-	memset(buf, 0, sizeof buf);
-	memset(&op, 0, sizeof op);
+		/* Let's hope that r_asm_disassemble modifies only the pc */
+		r_asm_set_pc(rasm, 0x1000);
 
-	/* Let's hope that r_asm_disassemble modifies only the pc */
-	r_asm_set_pc(rasm, 0x1000);
+		/* read the input */
+		read(0, buf, sizeof buf);
 
-	/* read the input */
-	read(0, buf, sizeof buf);
-
-	/* choose a plugin to test */
-	if (buf[0] >= nplugins)
-		goto nothing_to_do;
-	r_asm_use(rasm, plugins[buf[0]]->name);
-
-
-	/* test libr_asm */
-	int res = r_asm_disassemble(rasm, &op, buf+1, sizeof(buf) - 1);
+		/* choose a plugin to test */
+		if (buf[0] >= nplugins)
+			continue;
+		r_asm_use(rasm, plugins[buf[0]]->name);
 
 
-nothing_to_do:
-	/* restart the loop, if it makes sense. */
-	if (getenv("AFL_PERSISTENT") && persist_cnt++ < PERSIST_MAX) {
-		raise(SIGSTOP);
-		goto try_again;
-	}
+		/* test libr_asm */
+		int res = r_asm_disassemble(rasm, &op, buf+1, sizeof(buf) - 1);
+
+	} while (__AFL_LOOP(PERSIST_MAX));
 
 	/* release resources */
 	r_asm_free(rasm);
