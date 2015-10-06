@@ -31,12 +31,51 @@ int gather_plugins(RAsm *rasm, RAsmPlugin **plugins) {
 	return index;
 }
 
-int main(void) {
+/* Prints r2 commands that should reproduce the behavior of that input at
+ * stdin. */
+void explain(RAsmPlugin **plugins, int nplugins) {
+	ut8 buf[64];
+
+	memset(buf, 0, sizeof buf);
+	read(0, buf, sizeof buf);
+
+	if (buf[0] >= nplugins) {
+		printf("# Invalid asm plugin %d\n", buf[0]);
+		return;
+	}
+
+	RAsmPlugin *plugin = plugins[buf[0]];
+	printf("# Run as: r2 -i THIS-FILE -\n");
+	printf("e asm.arch=%s\t\t\t\t# %s\n", plugin->name, plugin->desc);
+
+	for (int addr = 0; addr < sizeof buf - 1; addr += 16) {
+		printf("wx ");
+		for (int i = 0; i < 16; i++) {
+			if (1 + addr + i < sizeof buf)
+				printf("%02x", buf[1 + addr + i]);
+			else
+				printf("00");
+		}
+		printf(" @ %d\n", addr);
+	}
+
+	printf("pd 1\n");
+}
+
+int main(int argc, char **argv) {
 	ut8 buf[64];
 	RAsmOp op;
 	RAsm *rasm = r_asm_new();
 	RAsmPlugin *plugins[256];
 	int nplugins = gather_plugins(rasm, plugins);
+
+	/* If --explain if given on the command line, print a r2 script that
+	 * can be used to reproduce the behavior of this input. Note that the
+	 * input is still read from stdin. */
+	if (argc == 2 && strcmp(argv[1], "--explain") == 0) {
+		explain(plugins, nplugins);
+		goto cleanup;
+	}
 
 	do {
 		/* reset stuff */
@@ -60,6 +99,7 @@ int main(void) {
 
 	} while (__AFL_LOOP(PERSIST_MAX));
 
+cleanup:
 	/* release resources */
 	r_asm_free(rasm);
 
