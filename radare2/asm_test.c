@@ -77,7 +77,8 @@ int main(int argc, char **argv) {
 		goto cleanup;
 	}
 
-	do {
+	while (__AFL_LOOP(PERSIST_MAX)) {
+
 		/* reset stuff */
 		memset(buf, 0, sizeof buf);
 		memset(&op, 0, sizeof op);
@@ -96,8 +97,7 @@ int main(int argc, char **argv) {
 
 		/* test libr_asm */
 		int res = r_asm_disassemble(rasm, &op, buf+1, sizeof(buf) - 1);
-
-	} while (__AFL_LOOP(PERSIST_MAX));
+	}
 
 cleanup:
 	/* release resources */
